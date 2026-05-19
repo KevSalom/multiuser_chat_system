@@ -2,6 +2,16 @@
 
 Multi-user chat system with persistent vector memory using LangGraph and ChromaDB.
 
+## Features
+
+- 💬 **Multi-User Chats** - Independent conversations per user
+- 🧠 **Vector Memory** - Persistent semantic memory per user
+- 🔍 **Memory Search** - Search past memories and contexts
+- ⭐ **Importance Scoring** - Memories rated 1-5 stars
+- 📝 **Auto-Extraction** - Automatic extraction of important info
+- 👤 **User Isolation** - Separate data per user
+- 💾 **Persistent History** - Conversation history saved via LangGraph
+
 ## Description
 
 Intelligent multi-user chat system that uses:
@@ -91,12 +101,3 @@ streamlit run app.py
    - Click "View All Memories"
    - Filter by category
    - View content and importance
-
-## Features
-
-- 💬 Independent chats per conversation
-- 🧠 Persistent vector memory
-- 🔍 Search of past memories
-- ⭐ Memory importance (1-5)
-- 📝 Automatic extraction of important information
-- 👤 Multi-user with isolated data
