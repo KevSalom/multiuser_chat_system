@@ -1,102 +1,102 @@
-# Chat Multi-Usuario con Memoria Avanzada
+# Multi-User Chat with Advanced Memory
 
-Sistema de chat multi-usuario con memoria vectorial persistente usando LangGraph y ChromaDB.
+Multi-user chat system with persistent vector memory using LangGraph and ChromaDB.
 
-## Descripción
+## Description
 
-Chat multi-usuario inteligente que utiliza:
-- **LangGraph** para orquestar mensajes y memoria
-- **ChromaDB** para memoria vectorial persistente por usuario
-- **Multi-usuario** con gestión de chats independientes
-- **Extracción automática** de memorias importantes
-- **Optimización de contexto** con trim_messages
+Intelligent multi-user chat system that uses:
+- **LangGraph** for orchestrating messages and memory
+- **ChromaDB** for persistent per-user vector memory
+- **Multi-user** with independent chat management
+- **Automatic extraction** of important memories
+- **Context optimization** with trim_messages
 
-## Arquitectura
+## Architecture
 
 ```
-Usuario → Chat → LangGraph → Memory Retrieval
+User → Chat → LangGraph → Memory Retrieval
                             → Context Optimization
                             → Response Generation
                             → Memory Extraction → ChromaDB
 ```
 
-## Técnicas Utilizadas
+## Techniques Used
 
-### 1. Gestión de Memoria Vectorial
-- ChromaDB por usuario
-- Extracción inteligente de memorias via LLM
-- Búsqueda semántica de memorias relevantes
-- Categorización (personal, profesional, preferencias, hechos_importantes)
+### 1. Vector Memory Management
+- ChromaDB per user
+- Intelligent memory extraction via LLM
+- Semantic search of relevant memories
+- Categorization (personal, professional, preferences, important_facts)
 
-### 2. LangGraph con Estado Persistente
-- SQLite checkpointer para persistencia
-- Thread por chat (user_id + chat_id)
-- trim_messages para gestión de contexto
-- Flujo secuencial: retrieval → optimization → response → extraction
+### 2. LangGraph with Persistent State
+- SQLite checkpointer for persistence
+- Thread per chat (user_id + chat_id)
+- trim_messages for context management
+- Sequential flow: retrieval → optimization → response → extraction
 
-### 3. Sistema Multi-Usuario
-- Gestión de usuarios con UserManager
-- Chats independientes por usuario
-- Metadatos de chat en JSON ligero
-- Historial de conversación persistente
+### 3. Multi-User System
+- User management with UserManager
+- Independent chats per user
+- Lightweight chat metadata in JSON
+- Persistent conversation history
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 multiuser_chat_system/
-├── app.py              # Aplicación Streamlit
-├── chatbot.py          # ModernChatbot con LangGraph
-├── memory_manager.py   # Gestión de memoria vectorial
-├── config.py           # Configuración
-├── utils.py            # Utilidades auxiliares
-├── users/              # Datos de usuarios (git ignored)
-└── data/               # Datos adicionales (git ignored)
+├── app.py              # Streamlit application
+├── chatbot.py          # ModernChatbot with LangGraph
+├── memory_manager.py   # Vector memory management
+├── config.py           # Configuration
+├── utils.py            # Helper utilities
+├── users/              # User data (git ignored)
+└── data/               # Additional data (git ignored)
 ```
 
-## Requisitos
+## Requirements
 
 - Python 3.10+
 - OpenAI API Key
 
-## Instalación
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Configuración
+## Configuration
 
-Crear archivo `.env` con tu API key:
+Create a `.env` file with your API key:
 
 ```
 OPENAI_API_KEY=sk-your-key-here
 ```
 
-## Uso
+## Usage
 
-1. **Iniciar la aplicación:**
+1. **Start the application:**
 ```bash
 streamlit run app.py
 ```
 
-2. **Crear usuario:**
-   - Sidebar: escribir ID de usuario
-   - Click "Crear Usuario"
+2. **Create a user:**
+   - Sidebar: enter user ID
+   - Click "Create User"
 
-3. **Crear nuevo chat:**
-   - Click "Nuevo Chat"
-   - Escribir mensaje para iniciar
+3. **Create a new chat:**
+   - Click "New Chat"
+   - Write a message to start
 
-4. **Ver memorias:**
-   - Click "Ver Todas las Memorias"
-   - Filtrar por categoría
-   - Ver contenido e importancia
+4. **View memories:**
+   - Click "View All Memories"
+   - Filter by category
+   - View content and importance
 
-## Funcionalidades
+## Features
 
-- 💬 Chats independientes por conversación
-- 🧠 Memoria vectorial persistente
-- 🔍 Búsqueda de memorias pasadas
-- ⭐ Importancia de memorias (1-5)
-- 📝 Extracción automática de información importante
-- 👤 Multi-usuario con datos aislados
+- 💬 Independent chats per conversation
+- 🧠 Persistent vector memory
+- 🔍 Search of past memories
+- ⭐ Memory importance (1-5)
+- 📝 Automatic extraction of important information
+- 👤 Multi-user with isolated data
