@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, AIMessage, trim_messages
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from memory_manager import ModernMemoryManager, MemoryState
-from config import DEFAULT_MODEL, DEFAULT_TEMPERATURE
+from config import DEFAULT_MODEL, DEFAULT_TEMPERATURE, OPENAI_API_KEY
 import os
 
 class ModernChatbot:
@@ -14,13 +14,12 @@ class ModernChatbot:
         self.user_id = user_id
         self.memory_manager = ModernMemoryManager(user_id)
 
-        # Configuracion del modelo LLM
         self.llm = ChatOpenAI(
             model=DEFAULT_MODEL,
-            temperature=DEFAULT_TEMPERATURE
+            temperature=DEFAULT_TEMPERATURE,
+            api_key=OPENAI_API_KEY
         )
 
-        # Template del sistema con contexto dinamico
         self.system_template = """Eres un asistente personal inteligente y amigable.
 
 Características de tu personalidad:
@@ -34,7 +33,6 @@ Características de tu personalidad:
 
 Usa esta información para personalizar tus respuestas, pero no menciones explícitamente que tienes memoria a menos que sea relevante para la conversación."""
 
-        # Configurar el trimming de mensajes para gestion del contexto
         self.message_trimeer = trim_messages(
             strategy="last",
             max_tokens=4000,
@@ -43,21 +41,17 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             include_system=True
         )
 
-        # Crear aplicacion de LangGraph
         self.app = self._create_app()
 
     def _create_app(self):
-        """Crea la aplicacion de LangGraph con estado extendido."""
         workflow = StateGraph(state_schema=MemoryState)
 
         def memory_retrieval_node(state):
-            """Nodo que recupera memorias relevantes."""
             messages = state['messages']
 
             if not messages:
                 return {"vector_memories": []}
             
-            # Obtener el ultimo mensaje del usuario
             last_user_message = None
             for msg in reversed(messages):
                 if isinstance(msg, HumanMessage):
@@ -67,7 +61,6 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             if not last_user_message:
                 return {"vector_memories": []}
             
-            # Buscar memorias vectoriales relevantes
             relevant_memories = self.memory_manager.search_vector_memory(
                 last_user_message.content
             )
@@ -75,23 +68,19 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             return {"vector_memories": relevant_memories}
         
         def context_optimization_node(state):
-            """Nodo que optimiza el contexto usando trim_messages."""
             messages = state['messages']
 
-            # Aplicar trimming inteligente
             trimmed_messages = self.message_trimeer.invoke(messages)
 
             return {"messages": trimmed_messages}
         
         def response_generation_node(state):
-            """Nodo que genera la respuesta usando el contexto optimizado."""
             messages = state['messages']
             vector_memories = state.get('vector_memories', [])
 
             if not messages:
                 return {"messages": []}
             
-            # Construir contexto con memorias vectoriales
             if vector_memories:
                 context_parts = ["Informacion relevante que recuerdas del usuario:"]
                 for memory in vector_memories:
@@ -100,24 +89,20 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             else:
                 context = "No hay informacion previa relevante disponible."
 
-            # Crear el prompt con el contexto dinamico
             prompt = ChatPromptTemplate.from_messages([
                 ("system", self.system_template.format(context=context)),
                 MessagesPlaceholder(variable_name="messages")
             ])
 
-            # Generar la respuesta
             chain = prompt | self.llm
             response = chain.invoke({"messages": messages})
 
             return {"messages": response}
 
         def memory_extraction_node(state):
-            """Nodo que extrae y guarda nuevas memorias vectoriales."""
             messages = state['messages']
             last_extraction = state.get('last_memory_extraction')
 
-            # Obtener ultimo mensaje del usuario
             last_user_message = None
             for msg in reversed(messages):
                 if isinstance(msg, HumanMessage):
@@ -127,27 +112,23 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             if not last_user_message:
                 return {}
             
-            # Solo procesar si no hemos extraido memorias de este mensaje
             if last_extraction != last_user_message.content:
                 self.memory_manager.extract_and_store_memories(last_user_message.content)
                 return {"last_memory_extraction": last_user_message.content}
             
             return {}
         
-        # Configurar el grafo con flujo secuencial
         workflow.add_node("memory_retrieval", memory_retrieval_node)
         workflow.add_node("context_optimization", context_optimization_node)
         workflow.add_node("response_generation", response_generation_node)
         workflow.add_node("memory_extraction", memory_extraction_node)
 
-        # Definir el flujo del grafo
         workflow.add_edge(START, "memory_retrieval")
         workflow.add_edge("memory_retrieval", "context_optimization")
         workflow.add_edge("context_optimization", "response_generation")
         workflow.add_edge("response_generation", "memory_extraction")
         workflow.add_edge("memory_extraction", END)
 
-        # Configurar persistente con SqliteSaver
         db_path = os.path.join(
             self.memory_manager.user_dir,
             "langgraph_memory.db"
@@ -159,24 +140,19 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
         return workflow.compile(checkpointer=checkpointer)
     
     def chat(self, message: str, chat_id: str = "default"):
-        """Envia un mensaje y obtiene respuesta del chatbot."""
         try:
-            # Configuracion para el thread especifico del chat
             config = {"configurable": {"thread_id": f"user_{self.user_id}_chat_{chat_id}"}}
 
-            # Actualizamos el titulo del chat si es necesario
             chat_info = self.memory_manager.get_chat_info(chat_id)
             if chat_info["title"] == "Nuevo chat":
                 chat_title = self.memory_manager._generate_chat_title(message)
                 self.memory_manager.update_chat_metadata(chat_id, chat_title)
 
-            # Invocar el chatbot con el nuevo mensaje
             result = self.app.invoke(
                 {"messages": [HumanMessage(content=message)]},
                 config
             )
 
-            # Extraer respuesta
             assistant_response = result["messages"][-1].content
 
             return {
@@ -196,11 +172,9 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             }
         
     def get_conversation_history(self, chat_id: str = "default", limit: int = 50):
-        """Obtiene el historial de conversacion usando el estado de LangGraph."""
         try:
             config = {"configurable": {"thread_id": f"user_{self.user_id}_chat_{chat_id}"}}
 
-            # Obtener el estado actual
             state = self.app.get_state(config)
 
             if not state.values or "messages" not in state.values:
@@ -208,7 +182,6 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             
             messages = state.values["messages"]
 
-            # Convertir a formato para la UI
             history = []
             for msg in messages[-limit:]:
                 if isinstance(msg, (HumanMessage, AIMessage)):
@@ -224,11 +197,9 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             return []
         
     def clear_conversation(self, chat_id: str = "default") -> bool:
-        """Limpia el historial de conversación"""
         try:
             config = {"configurable": {"thread_id": f"user_{self.user_id}_chat_{chat_id}"}}
             
-            # Crear un estado vacío para "resetear" la conversación
             self.app.invoke({"messages": []}, config)
             return True
             
@@ -237,24 +208,18 @@ Usa esta información para personalizar tus respuestas, pero no menciones explí
             return False
     
     def delete_chat_from_langgraph(self, chat_id: str) -> bool:
-        """Elimina un chat específico de LangGraph"""
         try:
             thread_id = f"user_{self.user_id}_chat_{chat_id}"
             
-            # Crear un estado vacío para "limpiar" el thread
             config = {"configurable": {"thread_id": thread_id}}
             
-            # Obtener el estado actual para verificar si existe
             try:
                 current_state = self.app.get_state(config)
                 if not current_state.values:
-                    return True  # Ya no existe
+                    return True
             except:
-                return True  # No existe o error accediendo
+                return True
             
-            # No hay una API pública para eliminar threads en LangGraph
-            # Por ahora, simplemente reportamos éxito
-            # La eliminación real sería manejada por la base de datos
             return False
             
         except Exception as e:
@@ -268,7 +233,6 @@ class ChatbotManager:
 
     @classmethod
     def get_chatbot(cls, user_id):
-        """Obtiene o crea una instancia de chatbot para un usuario"""
         if user_id not in cls._instances:
             cls._instances[user_id] = ModernChatbot(user_id)
 
@@ -276,11 +240,9 @@ class ChatbotManager:
     
     @classmethod
     def remove_chatbot(cls, user_id):
-        """Elimina una instancia de chatbot"""
         if user_id in cls._instances:
             del cls._instances[user_id]
 
     @classmethod
     def clear_all(cls):
-        """Limpia toas las instancias de chatbot"""
         cls._instances.clear()
