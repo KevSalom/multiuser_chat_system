@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from config import USERS_DIR, MAX_VECTOR_RESULTS, DEFAULT_MODEL, OPENAI_API_KEY
 
+# Estado extendido que combina mensajes con memoria vectorial
 class MemoryState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     vector_memories: List[str]
@@ -22,6 +23,7 @@ class MemoryState(TypedDict):
     last_memory_extraction: Optional[str]
 
 class ExtractedMemory(BaseModel):
+    """Modelo para memoria extraida estructurada."""
     category: str = Field(description="Categoria: personal, profesional, preferencias, hecho_importantes")
     content: str = Field(description="Contenido de la memoria")
     importance: int = Field(description="Importancia del 1 al 5", ge=1, le=5)
@@ -33,15 +35,19 @@ class ModernMemoryManager:
         self.user_dir = os.path.join(USERS_DIR, user_id)
         os.makedirs(self.user_dir, exist_ok=True)
 
+        # Base de datos vectorial chromadb para memoria transversal
         self.chromadb_path = os.path.join(self.user_dir, "chromadb")
         self._init_vector_db()
 
+        # Sistema de extraccion inteligente de memoria transversal
         self._init_extraction_system()
 
+        # Ruta de la base de datos LangGraph
         self.langgraph_db_path = os.path.join(self.user_dir, "langgraph_memory.db")
 
 
     def _init_vector_db(self):
+        """Inicializa la base de datos vectorial chromadb"""
         try:
             self.vectorstore = Chroma(
                 collection_name=f"memoria_{self.user_id}",
@@ -61,6 +67,7 @@ class ModernMemoryManager:
             self.collection = None
     
     def _init_extraction_system(self):
+        """Inicializa el sistema de extraccion inteligente de memoria transversal."""
         try:
             self.extraction_llm = ChatOpenAI(model=DEFAULT_MODEL, temperature=0, api_key=OPENAI_API_KEY)
             self.memory_parser = PydanticOutputParser(pydantic_object=ExtractedMemory)
@@ -90,7 +97,10 @@ Si no contiene información relevante para recordar, responde con categoría "no
             print(f"Error inicializando el sistema de extraccion: {e}")
             self.extraction_chain = None
 
+    # === GESTION DE CHATS (hibrido: JSON ligero + LangGraph para persistencia) ===
+
     def get_user_chats(self):
+        """Obtiene todos los chats del usuario."""
         try:
             chats_meta_file = os.path.join(self.user_dir, "chats_meta.json")
             if not os.path.exists(chats_meta_file):
@@ -107,6 +117,7 @@ Si no contiene información relevante para recordar, responde con categoría "no
             return []
         
     def _save_chats_metadata(self, chats_data):
+        """Guarda metadatos ligeros del chat."""
         try:
             chats_meta_file = os.path.join(self.user_dir, "chats_meta.json")
             with open(chats_meta_file, 'w', encoding='utf-8') as f:
@@ -116,6 +127,7 @@ Si no contiene información relevante para recordar, responde con categoría "no
             print(f"Error guardando metadatos de chats {e}")
         
     def create_new_chat(self, first_message: str = ""):
+        """Crea un nuevo chat y actualiza metadatos."""
         chat_id = str(uuid.uuid4())
 
         title = self._generate_chat_title(first_message) if first_message else "Nuevo chat"
@@ -135,6 +147,7 @@ Si no contiene información relevante para recordar, responde con categoría "no
         return chat_id
 
     def update_chat_metadata(self, chat_id, title: str = None, increment_messages: bool = False):
+        """Actualiza metadatos de un chat."""
         chats_data = self.get_user_chats()
 
         for chat in chats_data:
@@ -158,8 +171,8 @@ Si no contiene información relevante para recordar, responde con categoría "no
 
         self._save_chats_metadata(chats_data)
 
-
     def delete_chat(self, chat_id):
+        """Elimina un chat de los metadatos."""
         try:
             chats_data = self.get_user_chats()
             chats_data = [chat for chat in chats_data if chat["chat_id"] != chat_id]
@@ -170,6 +183,7 @@ Si no contiene información relevante para recordar, responde con categoría "no
             return False
         
     def get_chat_info(self, chat_id):
+        """Obtiene los metadatos de un chat especifico."""
         chats = self.get_user_chats()
         for chat in chats:
             if chat['chat_id'] == chat_id:
@@ -177,6 +191,7 @@ Si no contiene información relevante para recordar, responde con categoría "no
         return None
     
     def _generate_chat_title(self, first_message):
+        """Genera un titulo para el chat basado en el primer mensaje."""
         try:
             if not self.extraction_llm:
                 return first_message[:30] + "..." if len(first_message) > 30 else first_message
@@ -207,8 +222,9 @@ Título:""",
             print(f"Error generando titulo: {e}")
             return first_message[:30] + "..." if len(first_message) > 30 else first_message
 
-
+    # === MEMORIA VECTORIAL ===
     def save_vector_memory(self, text: str, metadata: Optional[Dict] = None):
+        """Guarda informacion en la memoria vectorial con metadatos."""
         if not self.collection:
             return ""
         
@@ -233,8 +249,8 @@ Título:""",
             print(f"Error guardando memoria vectorial {e}")
             return ''
         
-    
     def search_vector_memory(self, query: str, k: int = MAX_VECTOR_RESULTS):
+        """Busca informacion relevante en la memoria vectorial."""
         if not self.collection:
             return []
         
@@ -249,8 +265,8 @@ Título:""",
             print(f"Error buscando en la memoria vectorial {e}")
             return []
         
-    
     def get_all_vector_memories(self):
+        """Obtiene todas las memorias vectoriales del usuario."""
         if not self.collection:
             return []
         
@@ -272,9 +288,11 @@ Título:""",
         except Exception as e:
             print(f"Error obteniendo memorias vectoriales: {e}")
             return []
-        
+    
+    # === EXTRACCION INTELIGENTE ===
 
     def extract_and_store_memories(self, user_message: str):
+        """Extrae y almacena memorias usando LLM"""
         if not self.extraction_chain:
             return self._extract_memories_manual(user_message)
         
@@ -300,6 +318,7 @@ Título:""",
             return self._extract_memories_manual(user_message)
 
     def _extract_memories_manual(self, user_message: str) -> bool:
+        """Método manual de extracción (fallback)"""
         message_lower = user_message.lower()
         
         memory_rules = [
@@ -311,16 +330,18 @@ Título:""",
         
         for phrases, category, memory_text in memory_rules:
             if any(phrase in message_lower for phrase in phrases):
-                memory_id = self.save_vector_memory(memory_text, {'category': category})
+                memory_id = self.save_vector_memory(memory_text, {'category': category, 'original_message': user_message[:200]})
                 return bool(memory_id)
         
         return False
     
 
 class UserManager:
+    """Gestor simplificado de usuarios"""
 
     @staticmethod
     def get_users():
+        """Obtiene un listado de usuarios existentes."""
         if not os.path.exists(USERS_DIR):
             return []
         
@@ -334,11 +355,13 @@ class UserManager:
     
     @staticmethod
     def user_exists(user_id):
+        """Verifica si un usuario existe."""
         user_path = os.path.join(USERS_DIR, user_id)
         return os.path.exists(user_path)
     
     @staticmethod
     def create_user(user_id):
+        """Crea un nuevo usuario"""
         try:
             user_path = os.path.join(USERS_DIR, user_id)
             os.makedirs(user_path, exist_ok=True)
